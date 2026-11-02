@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#AECBDD">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="iBEACON SCANNER FINAL" android:textStyle="bold"
+            android:textSize="18sp" android:textColor="#000000" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="Filter berdasarkan:"
+            android:textColor="#000000" />
+
+        <RadioGroup android:id="@+id/rgFilter"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <RadioButton android:id="@+id/rbName" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Nama" android:checked="true" />
+            <RadioButton android:id="@+id/rbUuid" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="UUID" />
+            <RadioButton android:id="@+id/rbMac" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="MAC" />
+        </RadioGroup>
+
+        <EditText android:id="@+id/etFilter"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="ESP32-KANAN"
+            android:inputType="textCapCharacters|textNoSuggestions"
+            android:singleLine="true" android:textSize="15sp" />
+
+        <Button android:id="@+id/btnScan"
+            android:layout_width="120dp" android:layout_height="100dp"
+            android:layout_gravity="center_horizontal" android:layout_marginTop="16dp"
+            android:text="Scan" />
+
+        <TextView android:id="@+id/tvMajor"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:text="Major : -"
+            android:textStyle="bold" android:textSize="18sp" android:textColor="#000000" />
+
+        <TextView android:id="@+id/tvMinor"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Minor : -"
+            android:textStyle="bold" android:textSize="18sp" android:textColor="#000000" />
+
+        <TextView android:id="@+id/tvWeight"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="32dp" android:text="Beratnya = - KG"
+            android:textStyle="bold" android:textSize="22sp" android:textColor="#000000" />
+
+        <TextView android:id="@+id/tvInfo"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:textIsSelectable="true"
+            android:textSize="13sp" android:textColor="#222222" />
+
+        <TextView android:id="@+id/tvStatus"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Siap scan"
+            android:textSize="14sp" android:textColor="#333333" />
+    </LinearLayout>
+</ScrollView>
