@@ -24,3 +24,12 @@ Build > Build Bundle(s)/APK(s) > Build APK(s). Hasil: `app/build/outputs/apk/deb
 
 ## Rumus berat
 berat (kg) = (Major x 256 + Minor) / 10  ->  Major 3, Minor 62 = 83 KG
+
+## Versi laptop (Windows .exe)
+Folder `desktop/` berisi versi Windows (Python + Bleak) dengan tampilan & filter yang sama,
+plus opsi **Scan terus (live)** yang menampilkan waktu data pertama dan rata-rata interval update.
+
+- Unduh: tab **Actions** > "Build EXE (Windows)" > artifact `iBeaconScanner-exe`.
+- Syarat: Windows 10/11 dengan Bluetooth LE aktif.
+- Tanpa exe: `pip install bleak` lalu `python desktop/beacon_scanner.py`.
+- Catatan: exe tanpa tanda tangan digital, SmartScreen bisa muncul > "More info" > "Run anyway".

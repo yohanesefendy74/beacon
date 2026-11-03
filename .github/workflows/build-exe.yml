@@ -1,0 +1,37 @@
+name: Build EXE (Windows)
+on:
+  push:
+    paths: ['desktop/**', '.github/workflows/build-exe.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install dependencies
+        run: pip install -r desktop/requirements.txt
+
+      - name: Build exe
+        working-directory: desktop
+        run: >
+          pyinstaller --noconfirm --onefile --windowed
+          --name iBeaconScanner
+          --collect-all bleak --collect-submodules winrt
+          beacon_scanner.py
+
+      - name: Self-test exe
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\iBeaconScanner.exe -ArgumentList '--selftest' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content selftest_error.txt; exit 1 }
+          Write-Host "Self-test OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iBeaconScanner-exe
+          path: desktop/dist/iBeaconScanner.exe
