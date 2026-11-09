@@ -13,7 +13,7 @@ Build > Build Bundle(s)/APK(s) > Build APK(s). Hasil: `app/build/outputs/apk/deb
 
 ## Langkah
 1. Upload `esp32/ESP32_iBeacon_Scale.ino` ke ESP32 (aktifkan `USE_HX711` jika pakai load cell).
-   Pilih sumber berat di `INPUT_MODE` (lihat bagian **Sumber berat ESP32**).
+   Pilih jenis timbangan di `INPUT_MODE`: `INPUT_MONITOR` atau `INPUT_NON` (lihat bagian **Jenis timbangan di ESP32**).
 2. Install APK, izinkan Bluetooth + Lokasi, nyalakan GPS (wajib untuk BLE scan di Android).
 3. Pilih filter **Nama**, **UUID**, atau **MAC**. UUID & MAC ada di Serial Monitor ESP32 (115200),
    atau scan sekali pakai mode Nama: UUID & MAC terdeteksi akan tampil di layar.
@@ -35,16 +35,17 @@ plus opsi **Scan terus (live)** yang menampilkan waktu data pertama dan rata-rat
 - Tanpa exe: `pip install bleak` lalu `python desktop/beacon_scanner.py`.
 - Catatan: exe tanpa tanda tangan digital, SmartScreen bisa muncul > "More info" > "Run anyway".
 
-## Sumber berat ESP32 (`INPUT_MODE`)
-| Mode | Pakai untuk | Rangkaian ke ESP32 |
+## Jenis timbangan di ESP32 (`INPUT_MODE`)
+| Pilihan | Jenis timbangan | Rangkaian ke ESP32 |
 |---|---|---|
-| `INPUT_DEMO` | tes tanpa timbangan (83 kg) | - |
-| `INPUT_HX711` | load cell langsung | HX711 DOUT -> GPIO18, SCK -> GPIO19 |
-| `INPUT_RS232` | indikator timbangan port RS232 | Indikator TX -> **MAX3232** -> GPIO16 (RX2) |
+| `INPUT_MONITOR` (default) | Timbangan **dengan monitor** (indikator) | Port RS232 indikator -> **MAX3232** -> GPIO16 (RX2) |
+| `INPUT_NON` | Timbangan **non monitor** (load cell langsung) | Load cell -> **HX711**: DOUT -> GPIO18, SCK -> GPIO19 |
+| `INPUT_DEMO` | Tes tanpa timbangan (83 kg) | - |
 
-**Jangan** sambungkan sinyal RS232 (+/-12 V) langsung ke pin ESP32: wajib lewat converter, dan GND harus tersambung.
+**Jangan** sambungkan sinyal RS232 (+/-12 V) langsung ke pin ESP32: wajib lewat MAX3232, dan GND harus tersambung.
+Untuk `INPUT_NON`, atur `CALIBRATION_FACTOR` sesuai load cell (kalibrasi dengan beban yang diketahui).
 
-Setelan RS232 di sketch (samakan dengan menu komunikasi indikator):
+Setelan timbangan dengan monitor (RS232) di sketch (samakan dengan menu komunikasi indikator):
 - `SCALE_BAUD` (umumnya 9600), `SCALE_FRAME` (`SERIAL_8N1` atau `SERIAL_7E1`)
 - `SCALE_PROTOCOL`: `PROTOCOL_GENERIC` (contoh `ST,GS,+  83.0kg`, `+0083.0`, `WT: 83.0 kg`; satuan kg/g/lb/t otomatis)
   atau `PROTOCOL_REVERSED` (Yaohua XK3190 mode kontinu, mis. `=0.3800`)
@@ -54,9 +55,3 @@ Setelan RS232 di sketch (samakan dengan menu komunikasi indikator):
 
 Workflow **Compile ESP32 sketch** meng-compile ketiga mode dan menyediakan file `.bin` per mode di tab Actions.
 
-
-## Mode baca: Non / Current Loop
-Ada di aplikasi Android dan exe laptop.
-- **Non**: sekali baca. Scan berhenti begitu berat pertama diterima (atau 10 detik jika tidak ketemu).
-- **Current Loop**: baca terus. Berat diperbarui setiap data dari ESP32 masuk, status menampilkan jumlah update
-  dan rata-rata interval (ms). Layar HP dibuat tetap menyala selama Current Loop. Tekan **Stop** untuk berhenti.

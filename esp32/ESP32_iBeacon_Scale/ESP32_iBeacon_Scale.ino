@@ -5,10 +5,10 @@
  * - Berat lewat Major/Minor     : nilai = berat x 10 ; Major = nilai >> 8, Minor = nilai & 0xFF
  *     contoh 83.0 KG -> 830 -> Major 3, Minor 62
  *
- * SUMBER BERAT (pilih di INPUT_MODE):
- *   INPUT_DEMO         : nilai tetap 83 kg, untuk tes tanpa timbangan
- *   INPUT_HX711        : load cell langsung via modul HX711
- *   INPUT_RS232        : indikator timbangan port RS232 / Non Current Loop (lewat modul MAX3232)
+ * JENIS TIMBANGAN (pilih di INPUT_MODE):
+ *   INPUT_MONITOR : timbangan DENGAN MONITOR (indikator) -> dibaca dari port RS232 lewat MAX3232
+ *   INPUT_NON     : timbangan NON monitor -> load cell langsung lewat modul HX711
+ *   INPUT_DEMO    : tes tanpa timbangan, selalu 83 kg
  *
  * Board: ESP32 Dev Module (Arduino core 2.x / 3.x)
  */
@@ -19,11 +19,11 @@
 
 // ======================= PENGATURAN =======================
 #define INPUT_DEMO         0
-#define INPUT_HX711        1
-#define INPUT_RS232        2
+#define INPUT_NON          1              // tanpa monitor: load cell + HX711
+#define INPUT_MONITOR      2              // dengan monitor: indikator via RS232
 
 #ifndef INPUT_MODE
-#define INPUT_MODE   INPUT_RS232          // <-- pilih sumber berat di sini
+#define INPUT_MODE   INPUT_MONITOR        // <-- pilih: INPUT_MONITOR atau INPUT_NON
 #endif
 
 #define DEVICE_NAME  "ESP32-KANAN"
@@ -32,7 +32,7 @@
 #define UPDATE_MS    200                  // cek berat baru tiap 200 ms
 #define ADV_INTERVAL 160                  // broadcast, satuan 0.625 ms -> 160 = 100 ms
 
-// ---- RS232 (indikator timbangan, Non Current Loop) ----
+// ---- Timbangan DENGAN MONITOR: port RS232 indikator ----
 // Samakan dengan setting port serial di indikator (lihat manual indikator).
 #define SCALE_RX_PIN      16              // ke TX converter (data masuk dari indikator)
 #define SCALE_TX_PIN      17              // ke RX converter (hanya dipakai jika perlu kirim perintah)
@@ -47,13 +47,13 @@
 // Logika sinyal dibalik? RS232 lewat MAX3232: false (ubah ke true hanya jika data acak/kosong).
 #define SCALE_INVERT      false
 
-// ---- HX711 (library "HX711" by Bogdan Necula) ----
+// ---- Timbangan NON monitor: load cell + HX711 (library "HX711" by Bogdan Necula) ----
 #define HX_DOUT 18
 #define HX_SCK  19
 #define CALIBRATION_FACTOR 21000.0
 // ==========================================================
 
-#if INPUT_MODE == INPUT_HX711
+#if INPUT_MODE == INPUT_NON
   #include "HX711.h"
   HX711 scale;
 #endif
@@ -88,7 +88,7 @@ void parseUuid(const char *s, uint8_t *out) {
 float lastKg = 0;
 bool  haveKg = false;
 
-#if INPUT_MODE == INPUT_RS232
+#if INPUT_MODE == INPUT_MONITOR
 char     lineBuf[64];
 uint8_t  lineLen = 0;
 uint32_t lastDataMs = 0, lastReqMs = 0, lastWarnMs = 0;
@@ -131,9 +131,9 @@ void pollSerialScale() {
 #endif
 
 float readWeightKg() {
-#if INPUT_MODE == INPUT_HX711
+#if INPUT_MODE == INPUT_NON
   if (scale.is_ready()) { lastKg = scale.get_units(1); haveKg = true; }
-#elif INPUT_MODE == INPUT_RS232
+#elif INPUT_MODE == INPUT_MONITOR
   pollSerialScale();
 #else
   lastKg = 83.0; haveKg = true;
@@ -166,8 +166,8 @@ void setBeacon(uint16_t major, uint16_t minor) {
 
 const char *modeName() {
   switch (INPUT_MODE) {
-    case INPUT_HX711:       return "HX711";
-    case INPUT_RS232:       return "RS232";
+    case INPUT_NON:       return "Non monitor (load cell HX711)";
+    case INPUT_MONITOR:   return "Dengan monitor (indikator RS232)";
     default:                return "DEMO (83 kg)";
   }
 }
@@ -176,11 +176,11 @@ void setup() {
   Serial.begin(115200);
   parseUuid(BEACON_UUID, uuidBytes);
 
-#if INPUT_MODE == INPUT_HX711
+#if INPUT_MODE == INPUT_NON
   scale.begin(HX_DOUT, HX_SCK);
   scale.set_scale(CALIBRATION_FACTOR);
   scale.tare();
-#elif INPUT_MODE == INPUT_RS232
+#elif INPUT_MODE == INPUT_MONITOR
   Serial2.begin(SCALE_BAUD, SCALE_FRAME, SCALE_RX_PIN, SCALE_TX_PIN, SCALE_INVERT);
 #endif
 
