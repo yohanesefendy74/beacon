@@ -3,7 +3,10 @@ pluginManagement {
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google(); mavenCentral()
+        maven { url 'https://jitpack.io' }   // usb-serial-for-android
+    }
 }
 rootProject.name = "BeaconScale"
 include ':app'

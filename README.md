@@ -54,3 +54,11 @@ Setelan RS232/Current Loop di sketch (samakan dengan menu komunikasi indikator):
 - `SCALE_INVERT`: ubah ke `true` jika data di Serial Monitor kosong/acak (sering terjadi di converter Current Loop)
 
 Workflow **Compile ESP32 sketch** meng-compile keempat mode dan menyediakan file `.bin` per mode di tab Actions.
+
+## Aplikasi Android: sumber RS232 / Current Loop (tanpa ESP32)
+Pilih **Sumber data**: Bluetooth (iBeacon ESP32), **RS232**, atau **Current Loop**.
+- RS232: indikator -> kabel **USB-RS232** (FTDI / PL2303 / CH340 / CP210x) -> **OTG** -> HP.
+- Current Loop 20 mA: indikator -> **converter Current Loop -> USB** -> OTG -> HP.
+- Atur Baud, Frame (8N1/7E1/...), Format (Umum / Yaohua terbalik), perintah minta berat (opsional), dan "Hanya berat stabil".
+- Tekan **Hubungkan**, izinkan akses USB. Layar menampilkan berat, data mentah, status Stabil/Bergerak, dan interval update.
+- HP harus mendukung USB OTG (aktifkan di pengaturan HP bila ada).

@@ -19,3 +19,8 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
+
+dependencies {
+    // Driver USB-serial (FTDI, PL2303, CH340, CP210x, CDC) untuk RS232 / Current Loop via OTG
+    implementation 'com.github.mik3y:usb-serial-for-android:3.8.1'
+}
