@@ -13,7 +13,7 @@ Build > Build Bundle(s)/APK(s) > Build APK(s). Hasil: `app/build/outputs/apk/deb
 
 ## Langkah
 1. Upload `esp32/ESP32_iBeacon_Scale.ino` ke ESP32 (aktifkan `USE_HX711` jika pakai load cell).
-   Pilih jenis timbangan di `INPUT_MODE`: `INPUT_MONITOR` atau `INPUT_NON` (lihat bagian **Jenis timbangan di ESP32**).
+   Jenis timbangan (Dengan Monitor / Non) dipilih dari aplikasi, lihat bagian **Jenis timbangan**.
 2. Install APK, izinkan Bluetooth + Lokasi, nyalakan GPS (wajib untuk BLE scan di Android).
 3. Pilih filter **Nama**, **UUID**, atau **MAC**. UUID & MAC ada di Serial Monitor ESP32 (115200),
    atau scan sekali pakai mode Nama: UUID & MAC terdeteksi akan tampil di layar.
@@ -35,15 +35,19 @@ plus opsi **Scan terus (live)** yang menampilkan waktu data pertama dan rata-rat
 - Tanpa exe: `pip install bleak` lalu `python desktop/beacon_scanner.py`.
 - Catatan: exe tanpa tanda tangan digital, SmartScreen bisa muncul > "More info" > "Run anyway".
 
-## Jenis timbangan di ESP32 (`INPUT_MODE`)
+## Jenis timbangan: Dengan Monitor / Non (dipilih di aplikasi)
+Di aplikasi Android / exe laptop pilih **Jenis timbangan**, lalu tekan **Terapkan ke ESP32**.
+Aplikasi mencari ESP32 (sesuai filter Nama/UUID/MAC), mengirim pilihan lewat Bluetooth, dan ESP32
+menyimpannya di flash (tetap berlaku setelah mati/nyala). Setiap Scan menampilkan jenis yang aktif.
+
 | Pilihan | Jenis timbangan | Rangkaian ke ESP32 |
 |---|---|---|
-| `INPUT_MONITOR` (default) | Timbangan **dengan monitor** (indikator) | Port RS232 indikator -> **MAX3232** -> GPIO16 (RX2) |
-| `INPUT_NON` | Timbangan **non monitor** (load cell langsung) | Load cell -> **HX711**: DOUT -> GPIO18, SCK -> GPIO19 |
-| `INPUT_DEMO` | Tes tanpa timbangan (83 kg) | - |
+| **Dengan Monitor** | Timbangan dengan indikator/monitor | Port RS232 indikator -> **MAX3232** -> GPIO16 (RX2) |
+| **Non** | Load cell langsung, tanpa monitor | Load cell -> **HX711**: DOUT -> GPIO18, SCK -> GPIO19 |
 
 **Jangan** sambungkan sinyal RS232 (+/-12 V) langsung ke pin ESP32: wajib lewat MAX3232, dan GND harus tersambung.
-Untuk `INPUT_NON`, atur `CALIBRATION_FACTOR` sesuai load cell (kalibrasi dengan beban yang diketahui).
+Untuk **Non**, atur `CALIBRATION_FACTOR` sesuai load cell. Untuk tes tanpa timbangan set `DEMO_MODE true` (selalu 83 kg).
+Sketch butuh library **HX711** (Bogdan Necula) terpasang di Arduino IDE.
 
 Setelan timbangan dengan monitor (RS232) di sketch (samakan dengan menu komunikasi indikator):
 - `SCALE_BAUD` (umumnya 9600), `SCALE_FRAME` (`SERIAL_8N1` atau `SERIAL_7E1`)
@@ -53,5 +57,5 @@ Setelan timbangan dengan monitor (RS232) di sketch (samakan dengan menu komunika
 - `ONLY_STABLE`: `true` agar hanya mengirim berat saat indikator stabil
 - `SCALE_INVERT`: biarkan `false` untuk MAX3232; ubah ke `true` hanya jika data di Serial Monitor kosong/acak
 
-Workflow **Compile ESP32 sketch** meng-compile ketiga mode dan menyediakan file `.bin` per mode di tab Actions.
+Workflow **Compile ESP32 sketch** menyediakan file `.bin` normal dan DEMO di tab Actions.
 

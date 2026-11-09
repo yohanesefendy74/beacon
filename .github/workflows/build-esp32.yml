@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [INPUT_MONITOR, INPUT_NON, INPUT_DEMO]
+        demo: ['false', 'true']
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2
@@ -19,13 +19,13 @@ jobs:
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli lib install "HX711"
-      - name: Compile (${{ matrix.mode }})
+      - name: Compile (DEMO_MODE=${{ matrix.demo }})
         run: >
           arduino-cli compile --fqbn esp32:esp32:esp32
-          --build-property "compiler.cpp.extra_flags=-DINPUT_MODE=${{ matrix.mode }}"
+          --build-property "compiler.cpp.extra_flags=-DDEMO_MODE=${{ matrix.demo }}"
           --output-dir out
           esp32/ESP32_iBeacon_Scale
       - uses: actions/upload-artifact@v4
         with:
-          name: esp32-${{ matrix.mode }}
+          name: esp32-${{ matrix.demo == 'true' && 'DEMO' || 'NORMAL' }}
           path: out/*.bin

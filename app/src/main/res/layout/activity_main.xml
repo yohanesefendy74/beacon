@@ -31,6 +31,28 @@
             android:inputType="textCapCharacters|textNoSuggestions"
             android:singleLine="true" android:textSize="15sp" />
 
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="14dp" android:text="Jenis timbangan:"
+            android:textStyle="bold" android:textColor="#000000" />
+
+        <RadioGroup android:id="@+id/rgType"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <RadioButton android:id="@+id/rbMonitor" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Dengan Monitor" android:checked="true" />
+            <RadioButton android:id="@+id/rbNon" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Non" />
+        </RadioGroup>
+
+        <Button android:id="@+id/btnApply"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Terapkan ke ESP32" />
+
+        <TextView android:id="@+id/tvType"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Jenis aktif di ESP32: - (tekan Scan)"
+            android:textSize="13sp" android:textColor="#333333" />
+
         <Button android:id="@+id/btnScan"
             android:layout_width="120dp" android:layout_height="100dp"
             android:layout_gravity="center_horizontal" android:layout_marginTop="16dp"

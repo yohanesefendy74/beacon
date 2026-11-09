@@ -4,6 +4,12 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
@@ -18,6 +24,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelUuid;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RadioGroup;
@@ -38,7 +45,21 @@ public class MainActivity extends Activity {
 
     private enum Mode { NAME, UUID, MAC }
 
-    private RadioGroup rgFilter;
+    // Jenis timbangan (harus sama dengan sketch ESP32)
+    private static final int TYPE_MONITOR = 1, TYPE_NON = 2;
+    private static final UUID CFG_SERVICE = UUID.fromString("8ec70001-6668-48da-9866-75be8bc86f4d");
+    private static final UUID CFG_TYPE    = UUID.fromString("8ec70002-6668-48da-9866-75be8bc86f4d");
+    private static final ParcelUuid TYPE_DATA =
+            ParcelUuid.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
+    private static final long APPLY_TIMEOUT_MS = 15_000;
+
+    private RadioGroup rgFilter, rgType;
+    private Button btnApply;
+    private TextView tvType;
+
+    private int pendingType = 0;        // != 0: sedang mengirim jenis timbangan ke ESP32
+    private BluetoothGatt gatt;
+    private boolean gattRetried;
     private EditText etFilter;
     private Button btnScan;
     private TextView tvMajor, tvMinor, tvWeight, tvInfo, tvStatus;
@@ -61,6 +82,9 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         rgFilter = findViewById(R.id.rgFilter);
+        rgType   = findViewById(R.id.rgType);
+        btnApply = findViewById(R.id.btnApply);
+        tvType   = findViewById(R.id.tvType);
         etFilter = findViewById(R.id.etFilter);
         btnScan  = findViewById(R.id.btnScan);
         tvMajor  = findViewById(R.id.tvMajor);
@@ -83,7 +107,15 @@ public class MainActivity extends Activity {
         });
         etFilter.setHint(hintFor(mode));
 
+        btnApply.setOnClickListener(v -> {
+            if (scanning || pendingType != 0) { toast("Tunggu proses sebelumnya selesai"); return; }
+            pendingType = rgType.getCheckedRadioButtonId() == R.id.rbNon ? TYPE_NON : TYPE_MONITOR;
+            if (hasPermissions()) startScan();
+            else requestPermissions();
+        });
+
         btnScan.setOnClickListener(v -> {
+            if (pendingType != 0) { toast("Sedang menerapkan jenis timbangan..."); return; }
             if (scanning) stopScan("Scan dihentikan");
             else if (hasPermissions()) startScan();
             else requestPermissions();
@@ -138,7 +170,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
         if (code == REQ_PERM && hasPermissions()) startScan();
-        else toast("Izin Bluetooth/Lokasi diperlukan untuk scan");
+        else { pendingType = 0; toast("Izin Bluetooth/Lokasi diperlukan untuk scan"); }
     }
 
     // ---------- Validasi input ----------
@@ -198,13 +230,17 @@ public class MainActivity extends Activity {
 
         scanning = true;
         btnScan.setText("Stop");
-        tvStatus.setText("Mencari (" + mode.name() + ") ...");
+        tvStatus.setText(pendingType != 0
+                ? "Mencari ESP32 untuk mengirim jenis timbangan..."
+                : "Mencari (" + mode.name() + ") ...");
         scanner.startScan(buildFilters(), settings, scanCallback);
         handler.postDelayed(timeoutRunnable, SCAN_TIMEOUT_MS);
     }
 
-    private final Runnable timeoutRunnable = () ->
-            stopScan("Device tidak ditemukan. Pastikan ESP32 menyala & lokasi/GPS aktif.");
+    private final Runnable timeoutRunnable = () -> {
+        pendingType = 0;
+        stopScan("Device tidak ditemukan. Pastikan ESP32 menyala & lokasi/GPS aktif.");
+    };
 
     @SuppressLint("MissingPermission")
     private void stopScan(String status) {
@@ -246,7 +282,16 @@ public class MainActivity extends Activity {
 
             int major = ((m[18] & 0xFF) << 8) | (m[19] & 0xFF);
             int minor = ((m[20] & 0xFF) << 8) | (m[21] & 0xFF);
-            onBeaconFound(name, uuid, mac, major, minor, result.getRssi());
+
+            byte[] td = record.getServiceData(TYPE_DATA);
+            int type = (td != null && td.length > 0) ? td[0] : 0;
+
+            if (pendingType != 0) {
+                BluetoothDevice dev = result.getDevice();
+                runOnUiThread(() -> { if (scanning) { stopScan(null); connectAndApply(dev); } });
+                return;
+            }
+            onBeaconFound(name, uuid, mac, major, minor, result.getRssi(), type);
         }
 
         @Override
@@ -256,7 +301,8 @@ public class MainActivity extends Activity {
     };
 
     // ---------- Hasil ----------
-    private void onBeaconFound(String name, UUID uuid, String mac, int major, int minor, int rssi) {
+    private void onBeaconFound(String name, UUID uuid, String mac, int major, int minor, int rssi,
+                               int type) {
         // nilai = berat x 10 -> Major = byte tinggi, Minor = byte rendah
         // contoh: Major 3, Minor 62 -> 830 -> 83.0 KG
         double weightKg = (major * 256 + minor) / 10.0;
@@ -266,11 +312,117 @@ public class MainActivity extends Activity {
             tvMajor.setText(String.format(Locale.US, "Major : %d = hex (%x)", major, major));
             tvMinor.setText(String.format(Locale.US, "Minor : %d = hex (%x)", minor, minor));
             tvWeight.setText("Beratnya = " + formatKg(weightKg) + " KG");
+            showType(type);
             tvInfo.setText("Nama : " + (name != null ? name : "-")
                     + "\nUUID : " + uuid.toString().toUpperCase(Locale.US)
                     + "\nMAC  : " + mac);
         });
     }
+
+    private void showType(int type) {
+        if (type == TYPE_MONITOR || type == TYPE_NON) {
+            tvType.setText("Jenis aktif di ESP32: " + typeName(type));
+            rgType.check(type == TYPE_NON ? R.id.rbNon : R.id.rbMonitor);
+        } else {
+            tvType.setText("Jenis aktif di ESP32: tidak diketahui (firmware ESP32 lama?)");
+        }
+    }
+
+    private static String typeName(int t) {
+        return t == TYPE_NON ? "Non" : "Dengan Monitor";
+    }
+
+    // ---------- Kirim jenis timbangan ke ESP32 (GATT) ----------
+    @SuppressLint("MissingPermission")
+    private void connectAndApply(BluetoothDevice dev) {
+        tvStatus.setText("Menghubungkan ke ESP32...");
+        btnApply.setEnabled(false);
+        handler.postDelayed(applyTimeout, APPLY_TIMEOUT_MS);
+        gattRetried = false;
+        openGatt(dev);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void openGatt(BluetoothDevice dev) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+            gatt = dev.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE);
+        else
+            gatt = dev.connectGatt(this, false, gattCallback);
+    }
+
+    private final Runnable applyTimeout = () -> finishApply("Gagal: ESP32 tidak merespons. Coba lagi.");
+
+    @SuppressLint("MissingPermission")
+    private void finishApply(String status) {
+        handler.removeCallbacks(applyTimeout);
+        if (gatt != null) {
+            try { gatt.disconnect(); gatt.close(); } catch (Exception ignored) {}
+            gatt = null;
+        }
+        pendingType = 0;
+        btnApply.setEnabled(true);
+        tvStatus.setText(status);
+    }
+
+    private final BluetoothGattCallback gattCallback = new BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
+        @Override
+        public void onConnectionStateChange(BluetoothGatt g, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                g.discoverServices();
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED && pendingType != 0) {
+                BluetoothDevice dev = g.getDevice();
+                g.close();
+                runOnUiThread(() -> {
+                    if (pendingType == 0) return;
+                    if (!gattRetried) {               // error 133 sering terjadi, coba sekali lagi
+                        gattRetried = true;
+                        tvStatus.setText("Mencoba menghubungkan lagi...");
+                        openGatt(dev);
+                    } else {
+                        gatt = null;
+                        finishApply("Gagal terhubung ke ESP32 (kode " + status + ")");
+                    }
+                });
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        @Override
+        public void onServicesDiscovered(BluetoothGatt g, int status) {
+            BluetoothGattService svc = g.getService(CFG_SERVICE);
+            BluetoothGattCharacteristic ch = svc != null ? svc.getCharacteristic(CFG_TYPE) : null;
+            if (ch == null) {
+                runOnUiThread(() -> finishApply(
+                        "ESP32 belum mendukung pilihan jenis timbangan. Upload sketch ESP32 terbaru."));
+                return;
+            }
+            byte[] value = {(byte) pendingType};
+            boolean ok;
+            if (Build.VERSION.SDK_INT >= 33) {
+                ok = g.writeCharacteristic(ch, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                        == BluetoothGatt.GATT_SUCCESS;
+            } else {
+                ch.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                ch.setValue(value);
+                ok = g.writeCharacteristic(ch);
+            }
+            if (!ok) runOnUiThread(() -> finishApply("Gagal mengirim ke ESP32"));
+        }
+
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic ch, int status) {
+            int t = pendingType;
+            runOnUiThread(() -> {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    showType(t);
+                    finishApply("Jenis timbangan di ESP32 diubah ke: " + typeName(t));
+                } else {
+                    finishApply("Gagal mengirim ke ESP32 (kode " + status + ")");
+                }
+            });
+        }
+    };
 
     private static String formatKg(double kg) {
         return (kg == Math.floor(kg)) ? String.valueOf((long) kg)
@@ -282,6 +434,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stopScan(null);
+        if (pendingType != 0) finishApply("");
         super.onDestroy();
     }
 }
