@@ -8,8 +8,7 @@
  * SUMBER BERAT (pilih di INPUT_MODE):
  *   INPUT_DEMO         : nilai tetap 83 kg, untuk tes tanpa timbangan
  *   INPUT_HX711        : load cell langsung via modul HX711
- *   INPUT_RS232        : indikator timbangan port RS232 (lewat modul MAX3232)
- *   INPUT_CURRENTLOOP  : indikator timbangan port Current Loop 20 mA (lewat converter CL->TTL)
+ *   INPUT_RS232        : indikator timbangan port RS232 / Non Current Loop (lewat modul MAX3232)
  *
  * Board: ESP32 Dev Module (Arduino core 2.x / 3.x)
  */
@@ -22,7 +21,6 @@
 #define INPUT_DEMO         0
 #define INPUT_HX711        1
 #define INPUT_RS232        2
-#define INPUT_CURRENTLOOP  3
 
 #ifndef INPUT_MODE
 #define INPUT_MODE   INPUT_RS232          // <-- pilih sumber berat di sini
@@ -34,7 +32,7 @@
 #define UPDATE_MS    200                  // cek berat baru tiap 200 ms
 #define ADV_INTERVAL 160                  // broadcast, satuan 0.625 ms -> 160 = 100 ms
 
-// ---- RS232 / Current Loop (indikator timbangan) ----
+// ---- RS232 (indikator timbangan, Non Current Loop) ----
 // Samakan dengan setting port serial di indikator (lihat manual indikator).
 #define SCALE_RX_PIN      16              // ke TX converter (data masuk dari indikator)
 #define SCALE_TX_PIN      17              // ke RX converter (hanya dipakai jika perlu kirim perintah)
@@ -46,8 +44,7 @@
 #define ONLY_STABLE       false           // true: hanya kirim berat saat indikator stabil (bukan "US")
 #define SCALE_TIMEOUT_MS  3000            // tidak ada data selama ini -> peringatan di Serial Monitor
 
-// Logika sinyal dibalik? RS232 lewat MAX3232: false.
-// Current Loop: tergantung converter. Jika Serial Monitor menampilkan data acak/kosong, ubah ke true.
+// Logika sinyal dibalik? RS232 lewat MAX3232: false (ubah ke true hanya jika data acak/kosong).
 #define SCALE_INVERT      false
 
 // ---- HX711 (library "HX711" by Bogdan Necula) ----
@@ -91,7 +88,7 @@ void parseUuid(const char *s, uint8_t *out) {
 float lastKg = 0;
 bool  haveKg = false;
 
-#if INPUT_MODE == INPUT_RS232 || INPUT_MODE == INPUT_CURRENTLOOP
+#if INPUT_MODE == INPUT_RS232
 char     lineBuf[64];
 uint8_t  lineLen = 0;
 uint32_t lastDataMs = 0, lastReqMs = 0, lastWarnMs = 0;
@@ -136,7 +133,7 @@ void pollSerialScale() {
 float readWeightKg() {
 #if INPUT_MODE == INPUT_HX711
   if (scale.is_ready()) { lastKg = scale.get_units(1); haveKg = true; }
-#elif INPUT_MODE == INPUT_RS232 || INPUT_MODE == INPUT_CURRENTLOOP
+#elif INPUT_MODE == INPUT_RS232
   pollSerialScale();
 #else
   lastKg = 83.0; haveKg = true;
@@ -171,7 +168,6 @@ const char *modeName() {
   switch (INPUT_MODE) {
     case INPUT_HX711:       return "HX711";
     case INPUT_RS232:       return "RS232";
-    case INPUT_CURRENTLOOP: return "Current Loop 20mA";
     default:                return "DEMO (83 kg)";
   }
 }
@@ -184,7 +180,7 @@ void setup() {
   scale.begin(HX_DOUT, HX_SCK);
   scale.set_scale(CALIBRATION_FACTOR);
   scale.tare();
-#elif INPUT_MODE == INPUT_RS232 || INPUT_MODE == INPUT_CURRENTLOOP
+#elif INPUT_MODE == INPUT_RS232
   Serial2.begin(SCALE_BAUD, SCALE_FRAME, SCALE_RX_PIN, SCALE_TX_PIN, SCALE_INVERT);
 #endif
 
@@ -207,7 +203,7 @@ uint32_t lastValue = 0xFFFFFFFF;
 uint32_t lastUpdate = 0;
 
 void loop() {
-  float kg = readWeightKg();     // RS232/CL dibaca terus agar buffer tidak penuh
+  float kg = readWeightKg();     // RS232 dibaca terus agar buffer tidak penuh
 
   if (millis() - lastUpdate < UPDATE_MS) { delay(5); return; }
   lastUpdate = millis();

@@ -1,4 +1,4 @@
-// Parser data berat dari indikator timbangan (RS232 / Current Loop).
+// Parser data berat dari indikator timbangan (RS232).
 // Tidak bergantung pada Arduino, jadi bisa dites di PC.
 #pragma once
 #include <string.h>

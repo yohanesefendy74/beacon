@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [INPUT_DEMO, INPUT_HX711, INPUT_RS232, INPUT_CURRENTLOOP]
+        mode: [INPUT_DEMO, INPUT_HX711, INPUT_RS232]
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2

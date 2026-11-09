@@ -41,24 +41,16 @@ plus opsi **Scan terus (live)** yang menampilkan waktu data pertama dan rata-rat
 | `INPUT_DEMO` | tes tanpa timbangan (83 kg) | - |
 | `INPUT_HX711` | load cell langsung | HX711 DOUT -> GPIO18, SCK -> GPIO19 |
 | `INPUT_RS232` | indikator timbangan port RS232 | Indikator TX -> **MAX3232** -> GPIO16 (RX2) |
-| `INPUT_CURRENTLOOP` | indikator timbangan port Current Loop 20 mA | Indikator CL -> **converter Current Loop->TTL 3.3 V** -> GPIO16 |
 
-**Jangan** sambungkan sinyal RS232 (+/-12 V) atau Current Loop langsung ke pin ESP32: wajib lewat converter, dan GND harus tersambung.
+**Jangan** sambungkan sinyal RS232 (+/-12 V) langsung ke pin ESP32: wajib lewat converter, dan GND harus tersambung.
 
-Setelan RS232/Current Loop di sketch (samakan dengan menu komunikasi indikator):
+Setelan RS232 di sketch (samakan dengan menu komunikasi indikator):
 - `SCALE_BAUD` (umumnya 9600), `SCALE_FRAME` (`SERIAL_8N1` atau `SERIAL_7E1`)
 - `SCALE_PROTOCOL`: `PROTOCOL_GENERIC` (contoh `ST,GS,+  83.0kg`, `+0083.0`, `WT: 83.0 kg`; satuan kg/g/lb/t otomatis)
   atau `PROTOCOL_REVERSED` (Yaohua XK3190 mode kontinu, mis. `=0.3800`)
 - `SCALE_REQUEST_CMD`: kosong = indikator kirim terus (continuous); isi perintah jika indikator mode command
 - `ONLY_STABLE`: `true` agar hanya mengirim berat saat indikator stabil
-- `SCALE_INVERT`: ubah ke `true` jika data di Serial Monitor kosong/acak (sering terjadi di converter Current Loop)
+- `SCALE_INVERT`: biarkan `false` untuk MAX3232; ubah ke `true` hanya jika data di Serial Monitor kosong/acak
 
-Workflow **Compile ESP32 sketch** meng-compile keempat mode dan menyediakan file `.bin` per mode di tab Actions.
+Workflow **Compile ESP32 sketch** meng-compile ketiga mode dan menyediakan file `.bin` per mode di tab Actions.
 
-## Aplikasi Android: sumber RS232 / Current Loop (tanpa ESP32)
-Pilih **Sumber data**: Bluetooth (iBeacon ESP32), **RS232**, atau **Current Loop**.
-- RS232: indikator -> kabel **USB-RS232** (FTDI / PL2303 / CH340 / CP210x) -> **OTG** -> HP.
-- Current Loop 20 mA: indikator -> **converter Current Loop -> USB** -> OTG -> HP.
-- Atur Baud, Frame (8N1/7E1/...), Format (Umum / Yaohua terbalik), perintah minta berat (opsional), dan "Hanya berat stabil".
-- Tekan **Hubungkan**, izinkan akses USB. Layar menampilkan berat, data mentah, status Stabil/Bergerak, dan interval update.
-- HP harus mendukung USB OTG (aktifkan di pengaturan HP bila ada).
