@@ -18,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.RadioGroup;
@@ -34,11 +35,21 @@ public class MainActivity extends Activity {
 
     private static final int REQ_PERM = 101;
     private static final long SCAN_TIMEOUT_MS = 10_000;
+    // Android menurunkan scan yang jalan >30 menit; di mode Current Loop scan di-restart tiap 25 menit
+    private static final long LOOP_RESTART_MS = 25 * 60_000;
     private static final int APPLE_COMPANY_ID = 0x004C;   // iBeacon
 
     private enum Mode { NAME, UUID, MAC }
 
-    private RadioGroup rgFilter;
+    private RadioGroup rgFilter, rgLoop;
+    private TextView tvLoopHint;
+
+    // Mode baca: Non = sekali baca, Current Loop = baca terus
+    private boolean loopMode = false;
+    private int hits;
+    private long startMs, firstHitMs, lastHitMs;
+    private double avgGapMs;
+    private String lockedMac;   // device yang sudah cocok, supaya paket tanpa nama tetap terbaca
     private EditText etFilter;
     private Button btnScan;
     private TextView tvMajor, tvMinor, tvWeight, tvInfo, tvStatus;
@@ -61,6 +72,8 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         rgFilter = findViewById(R.id.rgFilter);
+        rgLoop     = findViewById(R.id.rgLoop);
+        tvLoopHint = findViewById(R.id.tvLoopHint);
         etFilter = findViewById(R.id.etFilter);
         btnScan  = findViewById(R.id.btnScan);
         tvMajor  = findViewById(R.id.tvMajor);
@@ -82,6 +95,14 @@ public class MainActivity extends Activity {
             etFilter.setHint(hintFor(mode));
         });
         etFilter.setHint(hintFor(mode));
+
+        rgLoop.check(prefs.getBoolean("loop", false) ? R.id.rbLoop : R.id.rbNon);
+        updateLoopHint();
+        rgLoop.setOnCheckedChangeListener((g, id) -> {
+            prefs.edit().putBoolean("loop", id == R.id.rbLoop).apply();
+            updateLoopHint();
+            if (scanning) { stopScan(null); startScan(); }   // ganti mode langsung berlaku
+        });
 
         btnScan.setOnClickListener(v -> {
             if (scanning) stopScan("Scan dihentikan");
@@ -180,6 +201,12 @@ public class MainActivity extends Activity {
         return list.isEmpty() ? null : list;   // mode Nama: difilter di software
     }
 
+    private void updateLoopHint() {
+        tvLoopHint.setText(rgLoop.getCheckedRadioButtonId() == R.id.rbLoop
+                ? "Current Loop: baca terus, berat diperbarui setiap data masuk"
+                : "Non: sekali baca lalu berhenti");
+    }
+
     // ---------- BLE Scan ----------
     @SuppressLint("MissingPermission")
     private void startScan() {
@@ -196,19 +223,45 @@ public class MainActivity extends Activity {
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                 .build();
 
+        loopMode = rgLoop.getCheckedRadioButtonId() == R.id.rbLoop;
+        hits = 0; avgGapMs = 0; lockedMac = null;
+        startMs = System.currentTimeMillis();
+
         scanning = true;
         btnScan.setText("Stop");
-        tvStatus.setText("Mencari (" + mode.name() + ") ...");
+        tvStatus.setText((loopMode ? "Current Loop" : "Non") + ": mencari (" + mode.name() + ") ...");
         scanner.startScan(buildFilters(), settings, scanCallback);
         handler.postDelayed(timeoutRunnable, SCAN_TIMEOUT_MS);
+        if (loopMode) {
+            handler.postDelayed(restartRunnable, LOOP_RESTART_MS);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
     }
 
-    private final Runnable timeoutRunnable = () ->
-            stopScan("Device tidak ditemukan. Pastikan ESP32 menyala & lokasi/GPS aktif.");
+    private final Runnable timeoutRunnable = () -> {
+        String msg = "Device tidak ditemukan. Pastikan ESP32 menyala & lokasi/GPS aktif.";
+        if (loopMode) tvStatus.setText(msg + " Tetap mencari...");   // Current Loop: jangan berhenti
+        else stopScan(msg);
+    };
+
+    @SuppressLint("MissingPermission")
+    private final Runnable restartRunnable = new Runnable() {
+        @Override public void run() {
+            if (!scanning || scanner == null) return;
+            try {
+                scanner.stopScan(scanCallback);
+                scanner.startScan(buildFilters(), new ScanSettings.Builder()
+                        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCallback);
+            } catch (Exception ignored) {}
+            handler.postDelayed(this, LOOP_RESTART_MS);
+        }
+    };
 
     @SuppressLint("MissingPermission")
     private void stopScan(String status) {
         handler.removeCallbacks(timeoutRunnable);
+        handler.removeCallbacks(restartRunnable);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (scanning && scanner != null) {
             try { scanner.stopScan(scanCallback); } catch (Exception ignored) {}
         }
@@ -237,12 +290,14 @@ public class MainActivity extends Activity {
             }
 
             boolean match;
-            switch (mode) {
+            if (lockedMac != null && mac.equalsIgnoreCase(lockedMac)) match = true;
+            else switch (mode) {
                 case UUID: match = uuid.equals(targetUuid); break;
                 case MAC:  match = mac.equalsIgnoreCase(targetMac); break;
                 default:   match = name != null && name.equalsIgnoreCase(targetName);
             }
             if (!match) return;
+            lockedMac = mac;
 
             int major = ((m[18] & 0xFF) << 8) | (m[19] & 0xFF);
             int minor = ((m[20] & 0xFF) << 8) | (m[21] & 0xFF);
@@ -262,7 +317,24 @@ public class MainActivity extends Activity {
         double weightKg = (major * 256 + minor) / 10.0;
 
         runOnUiThread(() -> {
-            stopScan("Ditemukan (RSSI " + rssi + " dBm)");
+            if (!scanning) return;
+            long now = System.currentTimeMillis();
+            hits++;
+            if (hits == 1) firstHitMs = now - startMs;
+            else {
+                long gap = now - lastHitMs;
+                avgGapMs = hits == 2 ? gap : avgGapMs * 0.8 + gap * 0.2;   // rata-rata bergerak
+            }
+            lastHitMs = now;
+            handler.removeCallbacks(timeoutRunnable);
+
+            if (loopMode) {
+                tvStatus.setText("Current Loop: update ke-" + hits
+                        + (hits > 1 ? String.format(Locale.US, ", rata-rata tiap %.0f ms", avgGapMs) : "")
+                        + " (RSSI " + rssi + " dBm)");
+            } else {
+                stopScan("Ditemukan dalam " + firstHitMs + " ms (RSSI " + rssi + " dBm)");
+            }
             tvMajor.setText(String.format(Locale.US, "Major : %d = hex (%x)", major, major));
             tvMinor.setText(String.format(Locale.US, "Minor : %d = hex (%x)", minor, minor));
             tvWeight.setText("Beratnya = " + formatKg(weightKg) + " KG");

@@ -54,3 +54,9 @@ Setelan RS232 di sketch (samakan dengan menu komunikasi indikator):
 
 Workflow **Compile ESP32 sketch** meng-compile ketiga mode dan menyediakan file `.bin` per mode di tab Actions.
 
+
+## Mode baca: Non / Current Loop
+Ada di aplikasi Android dan exe laptop.
+- **Non**: sekali baca. Scan berhenti begitu berat pertama diterima (atau 10 detik jika tidak ketemu).
+- **Current Loop**: baca terus. Berat diperbarui setiap data dari ESP32 masuk, status menampilkan jumlah update
+  dan rata-rata interval (ms). Layar HP dibuat tetap menyala selama Current Loop. Tekan **Stop** untuk berhenti.

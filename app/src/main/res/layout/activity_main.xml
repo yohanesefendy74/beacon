@@ -31,6 +31,24 @@
             android:inputType="textCapCharacters|textNoSuggestions"
             android:singleLine="true" android:textSize="15sp" />
 
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Mode baca:"
+            android:textColor="#000000" />
+
+        <RadioGroup android:id="@+id/rgLoop"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <RadioButton android:id="@+id/rbNon" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Non" android:checked="true" />
+            <RadioButton android:id="@+id/rbLoop" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Current Loop" />
+        </RadioGroup>
+
+        <TextView android:id="@+id/tvLoopHint"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Non: sekali baca lalu berhenti"
+            android:textSize="12sp" android:textColor="#333333" />
+
         <Button android:id="@+id/btnScan"
             android:layout_width="120dp" android:layout_height="100dp"
             android:layout_gravity="center_horizontal" android:layout_marginTop="16dp"

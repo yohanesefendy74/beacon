@@ -87,9 +87,16 @@ class App:
                              fg="#555555", font=("Segoe UI", 8))
         self.hint.pack(anchor="w")
 
-        tk.Checkbutton(f, text="Scan terus (live, untuk uji kecepatan)",
-                       variable=self.live, bg=BG, activebackground=BG
-                       ).pack(anchor="w", pady=(6, 0))
+        tk.Label(f, text="Mode baca:", bg=BG).pack(anchor="w", pady=(10, 0))
+        lf = tk.Frame(f, bg=BG)
+        lf.pack(anchor="w")
+        for text, val in (("Non", False), ("Current Loop", True)):
+            tk.Radiobutton(lf, text=text, value=val, variable=self.live, bg=BG,
+                           activebackground=BG, command=self._loop_changed
+                           ).pack(side="left", padx=(0, 12))
+        self.loop_hint = tk.Label(f, text="Non: sekali baca lalu berhenti", bg=BG,
+                                  fg="#555555", font=("Segoe UI", 8))
+        self.loop_hint.pack(anchor="w")
 
         self.btn = tk.Button(f, text="Scan", width=12, height=4, command=self.toggle)
         self.btn.pack(pady=14)
@@ -123,6 +130,13 @@ class App:
             "UUID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
             "MAC": "AA:BB:CC:DD:EE:FF"}[self._cur_mode])
 
+    def _loop_changed(self):
+        self.loop_hint.config(text="Current Loop: baca terus, berat diperbarui setiap data masuk"
+                              if self.live.get() else "Non: sekali baca lalu berhenti")
+        if self.scanning:          # ganti mode saat scan: mulai ulang dengan mode baru
+            self.stop()
+            self.root.after(300, self.toggle)
+
     def set_info(self, text):
         self.info.configure(state="normal")
         self.info.delete("1.0", "end")
@@ -146,7 +160,8 @@ class App:
         self.scanning = True
         self.started = time.perf_counter()
         self.btn.config(text="Stop")
-        self.status.config(text=f"Mencari ({mode}) ...")
+        label = "Current Loop" if self.live.get() else "Non"
+        self.status.config(text=f"{label}: mencari ({mode}) ...")
         self.scan_future = asyncio.run_coroutine_threadsafe(
             self._scan(mode_core, target, self.live.get()), self.loop)
 
@@ -161,15 +176,19 @@ class App:
     async def _scan(self, mode, target, live):
         self.stop_event = asyncio.Event()
         found = False
+        locked = None   # device yang sudah cocok; paket tanpa nama tetap terbaca
 
         def on_adv(device, adv):
-            nonlocal found
+            nonlocal found, locked
+            if not live and found:
+                return
             beacon = core.parse_ibeacon(adv.manufacturer_data)
             if not beacon:
                 return
             name = adv.local_name or device.name
-            if not core.matches(mode, target, name, device.address, beacon):
+            if device.address != locked and not core.matches(mode, target, name, device.address, beacon):
                 return
+            locked = device.address
             found = True
             now = time.perf_counter()
             self.ui(self._on_found, name, device.address,
@@ -192,6 +211,8 @@ class App:
                             "Device tidak ditemukan. Pastikan ESP32 menyala & Bluetooth laptop aktif.")
 
     def _on_found(self, name, address, b, rssi, t):
+        if not self.scanning:
+            return
         self.hits += 1
         if self.last_hit is not None:
             self.intervals.append(t - self.last_hit)
@@ -213,7 +234,7 @@ class App:
             avg = sum(self.intervals) / len(self.intervals) * 1000
             speed += f" | Update ke-{self.hits}, rata-rata tiap {avg:.0f} ms"
         if self.live.get() and self.scanning:
-            self.status.config(text="Live... " + speed)
+            self.status.config(text="Current Loop: " + speed)
         else:
             self.stop("Ditemukan. " + speed)
 
